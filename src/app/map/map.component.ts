@@ -357,7 +357,7 @@ export class MapComponent implements OnInit {
         const feature = event.feature;
         const drawnGeometry = feature.getGeometry();
         console.log(drawnGeometry);
-        let coordinates = null;
+        let coordinates = null; 
         if (feature.getGeometry()?.getType() === 'Circle') {
           const center = drawnGeometry?.getCenter();
           const radius = drawnGeometry?.getRadius();
