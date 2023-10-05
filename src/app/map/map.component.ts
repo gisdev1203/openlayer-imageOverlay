@@ -288,7 +288,7 @@ export class MapComponent implements OnInit {
   sudbdividedParcels = []; 
   newLineStrings = []; 
   
-  setSubdividingParcel = (parcel) => {
+  setSubdividingParcel = ( parcel ) => {
     this.currentlySubdividingParcel = parcel;
     this.drawnLineStrings = [];
     this.sudbdividedParcels = null;
