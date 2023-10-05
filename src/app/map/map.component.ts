@@ -92,16 +92,16 @@ export class MapComponent implements OnInit {
       ],
       target: 'map',
       view: new View({
-        center: [-115.354, 51.0903],
+        // center: [-115.354, 51.0903],
         zoom: 14,
-        // center: [274770, 6243929],
+        center: [274770, 6243929],
         projection: 'EPSG:3857'
       }),
     });
     this.addFeatureGroupLayers();
     // Initialize the select interaction
     this.selectInteraction = new Transform_ext({
-      enableRotatedTransform: false,
+      enableRotatedTransform: true,
       addCondition: shiftKeyOnly,
       hitTolerance: 2,
       translateFeature: true,
@@ -193,8 +193,18 @@ export class MapComponent implements OnInit {
     const tmpextent = this.imageLayer.getExtent();
 
     // Create a polygon geometry from the extent
-    const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
-
+    // const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
+    const minX = tmpextent[0];
+  const minY = tmpextent[1];
+  const maxX = tmpextent[2];
+  const maxY = tmpextent[3];
+    const polygon = new Polygon([[
+      [minX,    maxY],
+      [minX,    minY],
+      [maxX,    minY],
+      [maxX,    maxY],
+      [minX,    maxY],
+    ]]);
 
     // Create a feature from the polygon geometry
     const feature = new Feature({
@@ -252,11 +262,11 @@ export class MapComponent implements OnInit {
   private setScaling = (e: any) => {
 
     
-    this.scale[0] = this.scale[0] * e.scale[0];
-    this.scale[1] = this.scale[1] * e.scale[1];
-    this.sourceImage.setScale([this.scale[0], this.scale[1]]);
+    this.scale[0] =  e.scale[0];
+    this.scale[1] =  e.scale[1];
+    this.sourceImage.setScale([this.scale[0], this.scale[0]]);
 
-    console.log("scale: ", e.scale[1], e.scale[0]);
+    console.log("scale: ", e.scale[0], e.scale[1]);
 
     // if (this.firstPoint) {
     //   this.selectInteraction.setCenter(e.features.getArray()[0].getGeometry().getFirstCoordinate());
