@@ -92,9 +92,9 @@ export class MapComponent implements OnInit {
       ],
       target: 'map',
       view: new View({
-        // center: [-115.354, 51.0903],
+        center: [-115.354, 51.0903],
         zoom: 14,
-        center: [274770, 6243929],
+        // center: [274770, 6243929],
         projection: 'EPSG:3857'
       }),
     });
