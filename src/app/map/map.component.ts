@@ -70,6 +70,8 @@ export class MapComponent implements OnInit {
 
   temp: number = 0.1;
   mapCenter: [0, 0];
+  // scale: [1, 1];
+  scale: [number, number] = [1, 1];
   d: [0, 0];
 
   ngOnInit() {
@@ -99,7 +101,7 @@ export class MapComponent implements OnInit {
     this.addFeatureGroupLayers();
     // Initialize the select interaction
     this.selectInteraction = new Transform_ext({
-      enableRotatedTransform: false,
+      enableRotatedTransform: true,
       addCondition: shiftKeyOnly,
       hitTolerance: 2,
       translateFeature: true,
@@ -108,7 +110,7 @@ export class MapComponent implements OnInit {
       keepAspectRatio: false,
       translate: true,
       keepRectangle: true,
-      stretch: true,
+      stretch: false,
       // pointRadius: function (f:any) {
       //   var radius = f.get('radius') || 10;
       //   return [radius, radius];
@@ -155,7 +157,6 @@ export class MapComponent implements OnInit {
     const reader = new FileReader();
     reader.onload = (e: any) => {
       const imageUrl = e.target.result;
-      console.log(imageUrl);
       this.map.removeLayer(this.imageLayer);
       const image = new Image();
 
@@ -176,7 +177,7 @@ export class MapComponent implements OnInit {
     this.sourceImage = new sourceGeoImage({
       url: imageUrl,
       imageCenter: this.mapCenter,
-      imageScale: [1, 1],
+      imageScale: this.scale,
       imageRotate: this.startangle,
       projection: 'EPSG:3857',
     });
@@ -188,9 +189,22 @@ export class MapComponent implements OnInit {
     });
 
     this.map.addLayer(this.imageLayer);
+    
+    const tmpextent = this.imageLayer.getExtent();
 
     // Create a polygon geometry from the extent
-    const polygon = fromExtent(this.imageLayer.getExtent());
+    // const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
+    const minX = tmpextent[0];
+  const minY = tmpextent[1];
+  const maxX = tmpextent[2];
+  const maxY = tmpextent[3];
+    const polygon = new Polygon([[
+      [minX,    maxY],
+      [minX,    minY],
+      [maxX,    minY],
+      [maxX,    maxY],
+      [minX,    maxY],
+    ]]);
 
     // Create a feature from the polygon geometry
     const feature = new Feature({
@@ -247,8 +261,12 @@ export class MapComponent implements OnInit {
 
   private setScaling = (e: any) => {
 
-    this.sourceImage.setScale([e.scale[0], e.scale[0]]);
-    console.log("scale: ", e.scale[1], e.scale[0]);
+    
+    this.scale[0] =  e.scale[0];
+    this.scale[1] =  e.scale[1];
+    this.sourceImage.setScale([this.scale[0], this.scale[0]]);
+
+    console.log("scale: ", e.scale[0], e.scale[1]);
 
     // if (this.firstPoint) {
     //   this.selectInteraction.setCenter(e.features.getArray()[0].getGeometry().getFirstCoordinate());
