@@ -372,7 +372,7 @@ export class MapComponent implements OnInit {
           // this.renderTurfLineStrings([geoJson?.geometry]);
           return;
         }
-      });
+      }); 
 
     }
     return;
