@@ -195,9 +195,10 @@ export class MapComponent implements OnInit {
     // Create a polygon geometry from the extent
     // const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
     const minX = tmpextent[0];
-  const minY = tmpextent[1];
-  const maxX = tmpextent[2];
-  const maxY = tmpextent[3];
+    const minY = tmpextent[1];
+    const maxX = tmpextent[2];
+    const maxY = tmpextent[3];
+    
     const polygon = new Polygon([[
       [minX,    maxY],
       [minX,    minY],
@@ -274,7 +275,7 @@ export class MapComponent implements OnInit {
     // if (e.features.getLength() === 1) {
     //   var feature = e.features.item(0);
     //   feature.set('radius', this.startRadius * Math.abs(e.scale[0]));
-    // }    
+    // }
   }
 
   ////
