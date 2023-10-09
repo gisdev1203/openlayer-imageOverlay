@@ -12,8 +12,12 @@ import { extend } from 'ol/extent';
 import { LineString, LinearRing, MultiLineString, MultiPolygon, Polygon } from 'ol/geom';
 import { Control, defaults as defaultControls } from 'ol/control.js';
 import { DrawLineStringControl, SetSubdividingParcelControl, DrawPolygonControl, ImageLoadControl,
-  ImagePoint, MapPoint, ImageTransform
+  ImagePoint, MapPoint, ImageTransform,
+  createBar, lineStringControl, polygonControl, redoControlButton, resetControl, revertControlButton, saveControlButton,
+  coordinateControl
 } from './controls';
+
+
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { asArray } from 'ol/color';
 import Fill from 'ol/style/Fill';
@@ -88,6 +92,16 @@ export class MapComponent implements OnInit {
 
   transformHelmert: any;
 
+  saveButton = null;
+	resetButton = null;
+	drawPolygonButton = null;
+	drawLineStringButton = null;
+	undoButton = null;
+	redoButton = null;
+	disableBtn = 'ol-disable';
+	freezeButtonState = false;
+	coordinateSection = null;
+
   ngOnInit() {
     this.initMap();
   }
@@ -112,7 +126,7 @@ export class MapComponent implements OnInit {
 
     this.map = new Map({
       controls: defaultControls().extend([
-        new DrawLineStringControl({}, this.toggleLineStringDraw), 
+        // new DrawLineStringControl({}, this.toggleLineStringDraw), 
         new DrawPolygonControl({}, this.togglePolygonDraw), 
         new ImageLoadControl({}, this.toggleImageLoad),
         new MapPoint({}, this.toggleMapPoint),
@@ -163,6 +177,7 @@ export class MapComponent implements OnInit {
       this.addPoint(event.coordinate);
     });
     this.transformHelmert = new GeoReference();
+
   }
 
   addPoint = (coordinate: [number, number]) => {
@@ -181,11 +196,13 @@ export class MapComponent implements OnInit {
   }
 
   toggleMapPoint = () => {
+    this.map.removeInteraction(this.selectInteraction);
     this.isMapPoint = true;
     this.isImgPoint = false;
   }
 
   toggleImagePoint = () => {
+    this.map.removeInteraction(this.selectInteraction);
     this.isMapPoint = false;
     this.isImgPoint = true;
   }
@@ -200,30 +217,38 @@ export class MapComponent implements OnInit {
 		// var t = this.transformHelmert.getTranslation();
     var center = this.sourceImage.getCenter();    
     var transformCenter = this.transformHelmert.transform(center);
-    if (a) this.sourceImage.setRotation(a);    
-    if (sc) this.sourceImage.setScale(sc);
+
+    // get feature from vectorlayer 
+    var feature = this.imageVectorySource.getFeatures()[0].getProperties().geometry;
+    const polygonFeature = feature.getCoordinates()[0];
+
+    const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
+    const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
+    console.log(polygonHeight);
+    // geoimage size
+    const imgWidth = this.sourceImage.getGeoImage().width;
+    const imgHeight = this.sourceImage.getGeoImage().height;
+    
+    const scaleX = polygonWidth * sc[0]  / imgWidth;
+    const scaleY = polygonHeight * sc[1] / imgHeight;
+    
+
+    if (a) this.sourceImage.setRotation(this.endangle + a);    
+    // if (sc) this.sourceImage.setScale(sc);
+    if (sc) this.sourceImage.setScale([scaleX, scaleY]);
     this.sourceImage.setCenter(transformCenter);
+    this.vectorSource.clear();
+    this.imageVectorySource.clear();
+    this.imageLayer.setOpacity(1);
   }
 
-  toggleLineStringDraw = () => {
-    
-    // this.map.removeLayer(this.imageLayer);
+  toggleLineStringDraw = () => {   
     
     this.map.removeInteraction(this.selectInteraction);
-    // if (this.drawInteractionRef) {
-    //   this.stopDrawingInteraction();
-    //   return;
-    // }
-    // this.startDrawingInteraction('LineString', this.subdivide, 'GeoJSON');    
   }
 
-  togglePolygonDraw = () => {
-    
-    // if (this.drawInteractionRef) {
-    //   this.stopDrawingInteraction();
-    //   return;
-    // }
-    // this.startDrawingInteraction('Polygon', this.subdivide, 'GeoJSON');
+  togglePolygonDraw = () => {   
+
   }
   resizeImage = (img: any, newWidth, newHeight) => {
     const canvas = document.createElement('canvas');
@@ -274,7 +299,7 @@ export class MapComponent implements OnInit {
       imageCenter: this.mapCenter,
       imageScale: this.scale,
       imageRotate: this.startangle,      
-      // projection: 'EPSG:3857',
+      projection: 'EPSG:3857',
     });
 
     console.log(this.sourceImage.getExtent());
@@ -317,12 +342,6 @@ export class MapComponent implements OnInit {
     this.imageVectorLayer = new VectorLayer({
       source: this.imageVectorySource,
       projection: 'EPSG:3857',
-      // style: new Style({
-      //   image: new Circle({
-      //     radius: 5,
-      //     fill: new Fill({ color: 'blue' }),
-      //   }),
-      // }),
       displayInLayerSwitcher: false
     } as any);
 
@@ -333,6 +352,7 @@ export class MapComponent implements OnInit {
   ///
 
   public endInteraction = (e: any) => {
+
   }
 
 
@@ -374,6 +394,7 @@ export class MapComponent implements OnInit {
     this.scale[0] =  e.scale[0];
     this.scale[1] =  e.scale[1];
     const polygonFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
+    console.log(e.features.getArray()[0].getGeometry());
 
     const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
     const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
@@ -385,9 +406,9 @@ export class MapComponent implements OnInit {
     const scaleY = polygonHeight / imgHeight;
 
     var interiorPoint = e.features.getArray()[0].getGeometry().getInteriorPoint().getCoordinates();
-    var center = [interiorPoint[0], interiorPoint[1]];
+    this.mapCenter = [interiorPoint[0], interiorPoint[1]];
 
-    this.sourceImage.setCenter(center);
+    this.sourceImage.setCenter(this.mapCenter);
     this.sourceImage.setScale([scaleX, scaleY]);
 
     if (e.features.getLength() === 1) {
@@ -433,14 +454,7 @@ export class MapComponent implements OnInit {
     this.renderGeoJsonPolygon(parcel);
   }
 
-  // return this.http.post<Polygon[]>(`${url}/api/subdivision`, { polygons: parcelsToSubdivide, lineStrings: [...surveyLines, surveyLineOrPolygon] }).pipe(
-  // 	filter(res => res.length > 1),
-  // 	tap(res => {
-  // 		if (res.length < 2 || res.length === parcelsToSubdivide.length) return;
-  // 		this.updateSubdivision(res);
-  // 		this.subdivisionStateStore.addSurveyGeometry(surveyLineOrPolygon);
-  // 	})
-  // );
+
 
   subdivide = (geoJson: any) => {
     // this.http.post<any[]>('http://localhost:8080/api/subdivision', {
