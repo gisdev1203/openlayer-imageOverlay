@@ -8,7 +8,7 @@
     *	With the similarity option the scale is the same along both axis ie. sx = sy
     */
 
-export class Helmert {
+export class GeoReference {
 
     options = {};
     similarity: any;
