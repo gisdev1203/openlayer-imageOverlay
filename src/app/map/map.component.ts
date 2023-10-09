@@ -34,6 +34,7 @@ import Point from 'ol/geom/Point';
 import { Circle } from 'ol/style';
 import { GeoReference } from './georeference';
 
+import { getLength } from 'ol/sphere';
 @Component({
   selector: 'app-map',
   templateUrl: './map.component.html',
@@ -143,7 +144,7 @@ export class MapComponent implements OnInit {
       translateFeature: false,
       scale: true,
       rotate: true,
-      keepAspectRatio: true,
+      keepAspectRatio: false,
       translate: true,
       keepRectangle: true,
       stretch: false,
@@ -276,7 +277,7 @@ export class MapComponent implements OnInit {
       imageCenter: this.mapCenter,
       imageScale: this.scale,
       imageRotate: this.startangle,      
-      projection: 'EPSG:3857',
+      // projection: 'EPSG:3857',
     });
 
     console.log(this.sourceImage.getExtent());
@@ -318,6 +319,7 @@ export class MapComponent implements OnInit {
 
     this.imageVectorLayer = new VectorLayer({
       source: this.imageVectorySource,
+      projection: 'EPSG:3857',
       // style: new Style({
       //   image: new Circle({
       //     radius: 5,
@@ -334,35 +336,6 @@ export class MapComponent implements OnInit {
   ///
 
   public endInteraction = (e: any) => {
-
-    // const geometry = this.sourceImage.getImage();
-    // console.log(geometry);
-    // this.sourceImage.setRotation(this.endangle);
-    console.log(e);
-    console.log(e.features.getArray()[0].getGeometry().getCoordinates()[0]);
-    // const tmpextent = this.imageVectorySource.getExtent();
-
-    // console.log(tmpextent);
-    // const minX = tmpextent[0];
-    // const minY = tmpextent[1];
-    // const maxX = tmpextent[2];
-    // const maxY = tmpextent[3];
-    
-    // const polygon = new Polygon([[
-    //   [minX,    maxY],
-    //   [minX,    minY],
-    //   [maxX,    minY],
-    //   [maxX,    maxY],
-    //   [minX,    maxY],
-    // ]]);
-
-    // this.imageVectorySource.clear();
-    // this.imageVectorySource.addFeature(new Feature(polygon));
-
-    // this.selectInteraction.setActive(true);
-
-    //setDrawFeature(e.features.getArray()[0]);
-    // setRectCoordinates(e.features.getArray()[0].getGeometry().getCoordinates()[0]);   
   }
 
 
@@ -387,17 +360,39 @@ export class MapComponent implements OnInit {
     this.sourceImage.setCenter(this.mapCenter);
   }
 
+  getLengthPoints(point1: any, point2: any) {
+    
+    const x1 = point1[0];
+    const y1 = point1[1];
+    const x2 = point2[0];
+    const y2 = point2[1];
+
+    let distance = Math.sqrt((x1-x2)*(x1-x2) + (y2-y1)*(y2-y1));
+    
+    return distance;
+  }
+
   private setScaling = (e: any) => {
     
     this.scale[0] =  e.scale[0];
     this.scale[1] =  e.scale[1];
-    this.sourceImage.setScale([this.scale[0], this.scale[0]]);
+    const polygonFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
 
-    console.log("scale: ", e.scale[0], e.scale[1]);
+    const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
+    const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
 
-    // if (this.firstPoint) {
-    //   this.selectInteraction.setCenter(e.features.getArray()[0].getGeometry().getFirstCoordinate());
-    // }
+    // geoimage size
+    const imgWidth = this.sourceImage.getGeoImage().width;
+    const imgHeight = this.sourceImage.getGeoImage().height;
+    const scaleX = polygonWidth / imgWidth;
+    const scaleY = polygonHeight / imgHeight;
+
+    var interiorPoint = e.features.getArray()[0].getGeometry().getInteriorPoint().getCoordinates();
+    var center = [interiorPoint[0], interiorPoint[1]];
+
+    this.sourceImage.setCenter(center);
+    this.sourceImage.setScale([scaleX, scaleY]);
+
     if (e.features.getLength() === 1) {
       var feature = e.features.item(0);
       feature.set('radius', this.startRadius * Math.abs(e.scale[0]));
