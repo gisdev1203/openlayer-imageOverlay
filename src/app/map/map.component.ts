@@ -28,13 +28,10 @@ import Transform_ext from 'ol-ext/interaction/Transform';
 import layerGeoImage from 'ol-ext/layer/GeoImage';
 import sourceGeoImage from 'ol-ext/source/GeoImage';
 import { shiftKeyOnly, always } from 'ol/events/condition';
-import { fromExtent } from 'ol/geom/Polygon';
-import { Projection } from 'ol/proj';
 import Point from 'ol/geom/Point';
 import { Circle } from 'ol/style';
 import { GeoReference } from './georeference';
 
-import { getLength } from 'ol/sphere';
 @Component({
   selector: 'app-map',
   templateUrl: './map.component.html',
