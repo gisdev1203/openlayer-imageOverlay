@@ -74,3 +74,18 @@ export class ImageLoadControl extends CustomActionControl1 {
 		super(options, 'ImageLoad', 'ImageLoad', callback);
 	}
 }
+export class MapPoint extends CustomActionControl {
+	constructor(options: any, callback: (options?: any) => void) {
+		super(options, 'pick up map', 'map', callback);
+	}
+}
+export class ImagePoint extends CustomActionControl {
+	constructor(options: any, callback: (options?: any) => void) {
+		super(options, 'pick up image', 'image', callback);
+	}
+}
+export class ImageTransform extends CustomActionControl {
+	constructor(options: any, callback: (options?: any) => void) {
+		super(options, 'imageTransform', 'transform', callback);
+	}
+}
