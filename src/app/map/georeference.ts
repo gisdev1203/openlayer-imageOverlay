@@ -146,7 +146,7 @@ export class GeoReference {
         this.a_ = Math.acos(a / sc);
         if (b > 0) this.a_ *= -1;
         this.sc_ = [sc, sc];
-        this.tr_ = [p, q];        
+        this.tr_ = [p, q];
 
         return this.matrix;
     }
@@ -278,5 +278,4 @@ export class GeoReference {
         this.matrix[5] = ty;
         return this.matrix;
     }
-
 }

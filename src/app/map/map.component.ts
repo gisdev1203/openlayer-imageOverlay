@@ -1,4 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
+
 import { Feature, Map, View } from 'ol';
 import { Draw, Snap } from 'ol/interaction';
 import TileLayer from 'ol/layer/Tile';
@@ -12,9 +13,16 @@ import { extend } from 'ol/extent';
 import { LineString, LinearRing, MultiLineString, MultiPolygon, Polygon } from 'ol/geom';
 import { Control, defaults as defaultControls } from 'ol/control.js';
 import { DrawLineStringControl, SetSubdividingParcelControl, DrawPolygonControl, ImageLoadControl,
-  ImagePoint, MapPoint, ImageTransform,
+  ImagePoint, MapPoint, ImageTransform, undoPoint,
   createBar, lineStringControl, polygonControl, redoControlButton, resetControl, revertControlButton, saveControlButton,
-  coordinateControl
+  coordinateControl,
+  dragControl,
+  scaleControl,
+  rotateControl,
+  rockControl,
+  freeRotateControl,
+  transparentControl,
+  removeControl,
 } from './controls';
 
 
@@ -81,7 +89,9 @@ export class MapComponent implements OnInit {
   d: [0, 0];
 
   mapPoints: any[] = [];
+  mapPointsFeatures: any[] = [];
   imgPoints: any[] = [];
+  imgPointsFeatures: any[] = [];
 
   vectorLayer: VectorLayer<any>;;
   vectorSource: VectorSource;
@@ -101,6 +111,16 @@ export class MapComponent implements OnInit {
 	disableBtn = 'ol-disable';
 	freezeButtonState = false;
 	coordinateSection = null;
+
+  imgMoveButton = null;
+  imgScaleButton = null;
+  imgRotateButton = null;
+  imgLockButton = null;
+  imgFreeRotateButton = null;
+  imgTranparentButton = null;
+  imgRemoveButton = null;
+
+  preMapCenter:  [0, 0];
 
   ngOnInit() {
     this.initMap();
@@ -130,9 +150,10 @@ export class MapComponent implements OnInit {
         new DrawPolygonControl({}, this.togglePolygonDraw), 
         new ImageLoadControl({}, this.toggleImageLoad),
         new MapPoint({}, this.toggleMapPoint),
-        new ImagePoint({}, this.toggleImagePoint),        
-        new ImageTransform({}, this.toggleImageTransform),        
-        ...this.getParcelControls()]),
+        new ImagePoint({}, this.toggleImagePoint),
+        new undoPoint({}, this.undo),
+        new ImageTransform({}, this.toggleImageTransform),
+        ]),
       layers: [
         new TileLayer({ source: new OSM() }),
         this.vectorLayer,
@@ -145,18 +166,19 @@ export class MapComponent implements OnInit {
         projection: 'EPSG:3857'
       }),
     });
+
     this.addFeatureGroupLayers();
     
     // Initialize the select interaction
     this.selectInteraction = new Transform_ext({
-      enableRotatedTransform: true,
+      enableRotatedTransform: false,
       addCondition: shiftKeyOnly,
       hitTolerance: 2,
       translateFeature: false,
-      scale: true,
-      rotate: true,
-      keepAspectRatio: false,
-      translate: true,
+      scale: false,
+      rotate: false,
+      keepAspectRatio: undefined,
+      translate: false,
       keepRectangle: true,
       stretch: false,
       pointRadius: function (f:any) {
@@ -176,21 +198,162 @@ export class MapComponent implements OnInit {
       console.log(event.coordinate);
       this.addPoint(event.coordinate);
     });
+    
     this.transformHelmert = new GeoReference();
 
+    this.addSubdivisionTools();
+
   }
+
+  addSubdivisionTools() {
+    this.imgMoveButton = dragControl('drage Image', (active:boolean) => this.imgMove(active) );
+    this.imgScaleButton = scaleControl('Scale Image', (active:boolean) => this.imgScale(active) );
+    this.imgRotateButton = rotateControl('Rotate Image', (active:boolean) => this.imgRotate(active) );
+
+    this.imgFreeRotateButton = freeRotateControl('Free Rotate Image', (active:boolean) => this.imgFreeRotate(active) );
+    this.imgLockButton = rockControl('Lock Image', (active:boolean) => this.imgRock(active) );
+    this.imgTranparentButton = transparentControl('make Image Transparents', (active:boolean) => this.imgTransparents(active) );
+    this.imgRemoveButton = removeControl('Remove Image', (active:boolean) => this.imgRemove(active) );
+		const mainbar = createBar([this.imgMoveButton, this.imgScaleButton, this.imgRotateButton, this.imgFreeRotateButton, this.imgLockButton, this.imgTranparentButton, this.imgRemoveButton]);
+		mainbar.setPosition('top');
+		this.map?.addControl(mainbar);
+		// this.disable([this.resetButton, this.saveButton, this.undoButton, this.redoButton]);
+	}
+
+  imgMove(active:boolean) {
+    console.log('move', active);
+    // this.selectInteraction.set('translateFeature', active);
+    this.setImageSetting(active, false, false, false);
+  }
+
+  imgRock(active: boolean) {    
+    if(active) this.selectInteraction.set('translateFeature', false);
+    else this.selectInteraction.set('translateFeature', false);
+  }
+
+  imgScale(active :boolean) {
+    console.log('imgScale', active);
+    this.setImageSetting(false, active, false, false);
+  }
+
+  imgRotate(active : boolean) {
+    console.log('img Rotate', active);
+    // this.selectInteraction.set('rotate', active);
+    this.setImageSetting(false, false, active, false);
+  }
+
+  imgFreeRotate(active : boolean) {
+    console.log('free img Rotate', active);
+  }
+
+  imgTransparents(active:boolean) {
+    if (active) {
+      this.imageLayer.setOpacity(0.3);
+    } else {
+      this.imageLayer.setOpacity(1);      
+    }
+  }
+
+  imgRemove(active : boolean){
+      this.imgPoints = [];      
+      this.imgPointsFeatures.forEach((feature)=>{
+        this.imageVectorySource.removeFeature(feature);
+      });
+      this.imgPointsFeatures = [];      
+  
+      this.mapPoints = [];
+      const lastFeature = this.mapPointsFeatures[this.mapPointsFeatures.length - 1];
+      this.mapPointsFeatures.forEach((feature)=>{
+        this.vectorSource.removeFeature(feature);
+      })
+      this.mapPointsFeatures = [];
+      this.removeImageLayer();  
+  }
+
+  setImageSetting(moveActive: boolean, scaleActive: boolean, rotateActive: boolean, rockActive: boolean, ) {
+    this.selectInteraction.set('rotate', rotateActive);
+    this.selectInteraction.set('translateFeature', moveActive);
+    this.selectInteraction.set('scale', scaleActive);    
+    this.selectInteraction.set('keepAspectRatio', always);
+    
+    if (scaleActive) this.selectInteraction.set("keepAspectRatio", always);
+    else this.selectInteraction.set("keepAspectRatio", function(e:any){ return e.originalEvent.shiftKey });  
+
+  }
+
+  showImageToolbar() {
+
+    // angular.element()
+    // const toolbar = document.getElementsByClassName('image-tool-bar');
+    // console.log(toolbar);
+    // toolbar[0].style.top = '500px';
+    
+  }
+  
+  hidenImageToolbar() {
+
+  }
+
+  moveImageToolbar(x,y) {
+
+  }
+
+  undo=()=> {
+    if (this.isImgPoint) this.undoImagePoint();
+    else if(this.isMapPoint) this.undoMapPoint();
+  }
+
+  undoImagePoint=()=> {
+    this.imgPoints.pop();
+    const lastFeature = this.imgPointsFeatures[this.imgPointsFeatures.length - 1];
+    this.imageVectorySource.removeFeature(lastFeature);
+    this.imgPointsFeatures.pop();
+  }
+
+  undoMapPoint=()=> {
+    this.mapPoints.pop();
+    const lastFeature = this.mapPointsFeatures[this.mapPointsFeatures.length - 1];
+    this.vectorSource.removeFeature(lastFeature);
+    this.mapPointsFeatures.pop();
+
+  }
+
+  redo() {
+
+  }
+
+  reset(){
+
+  }
+
+  saveSubdivision(){
+
+  }
+
+  disable(buttons: Array<any>): void {
+		if (!buttons?.length || this.freezeButtonState) return;
+		buttons?.forEach((data) => { if (data?.element) data?.element?.classList?.add(this.disableBtn); });
+	}
+	enable(buttons: Array<any>): void {
+		if (!buttons?.length || this.freezeButtonState) return;
+		buttons?.forEach((data) => { if (data?.element) data?.element?.classList?.remove(this.disableBtn); });
+	}
 
   addPoint = (coordinate: [number, number]) => {
     //this.vectorSource.clear(); // Clear previous points
 
     if (this.isImgPoint) {
       if (this.imageVectorySource) { 
-        this.imageVectorySource.addFeature(new Feature(new Point(coordinate))); // Add a new point feature
+        const feature = new Feature(new Point(coordinate));
+        this.imgPointsFeatures.push(feature);
+        this.imageVectorySource.addFeature(feature); // Add a new point feature
         this.imgPoints.push(coordinate);
       }
     }
     else if (this.isMapPoint) {
-      this.vectorSource.addFeature(new Feature(new Point(coordinate))); // Add a new point feature
+      const feature = new Feature(new Point(coordinate));
+      this.mapPointsFeatures.push(feature);
+      this.vectorSource.addFeature(feature); // Add a new point feature
       this.mapPoints.push(coordinate);
     }
   }
@@ -225,15 +388,15 @@ export class MapComponent implements OnInit {
     const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
     const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
     console.log(polygonHeight);
+    
     // geoimage size
+    
     const imgWidth = this.sourceImage.getGeoImage().width;
     const imgHeight = this.sourceImage.getGeoImage().height;
-    
     const scaleX = polygonWidth * sc[0]  / imgWidth;
     const scaleY = polygonHeight * sc[1] / imgHeight;
-    
 
-    if (a) this.sourceImage.setRotation(this.endangle + a);    
+    if (a) this.sourceImage.setRotation(this.endangle + a);
     // if (sc) this.sourceImage.setScale(sc);
     if (sc) this.sourceImage.setScale([scaleX, scaleY]);
     this.sourceImage.setCenter(transformCenter);
@@ -247,9 +410,14 @@ export class MapComponent implements OnInit {
     this.map.removeInteraction(this.selectInteraction);
   }
 
-  togglePolygonDraw = () => {   
-
+  togglePolygonDraw = () => {
+    this.resetImage();
+    let doc = document.getElementsByClassName('image-tool-bar') as any;
+    doc[0].style.top = "100px";
+    console.log(doc);   
+    this.showImageToolbar()
   }
+
   resizeImage = (img: any, newWidth, newHeight) => {
     const canvas = document.createElement('canvas');
     // Calculate aspect ratio
@@ -270,11 +438,11 @@ export class MapComponent implements OnInit {
 
   // upload image
   toggleImageLoad = (event: any) => {
+    this.removeImageLayer();
     const file = event.target.files[0];
     const reader = new FileReader();
     reader.onload = (e: any) => {
-      const imageUrl = e.target.result;
-      
+      const imageUrl = e.target.result;     
 
       this.map.removeLayer(this.imageLayer);
       const image = new Image();
@@ -291,31 +459,22 @@ export class MapComponent implements OnInit {
     reader.readAsDataURL(file);
   }
 
-  public addImage(imageUrl: any, width: any, height: any) {
-    this.mapCenter = this.map.getView().getCenter();
+  resetImage=()=> {
 
-    this.sourceImage = new sourceGeoImage({
-      url: imageUrl,
-      imageCenter: this.mapCenter,
-      imageScale: this.scale,
-      imageRotate: this.startangle,      
-      projection: 'EPSG:3857',
-    });
+    this.mapCenter = this.preMapCenter;
+  
+    this.scale = [1, 1];
+    this.startangle = 0;
+    this.sourceImage.setCenter(this.preMapCenter);
+    this.sourceImage.setScale(this.scale);
+    this.sourceImage.setRotation(this.startangle);
+    this.map.removeLayer(this.imageVectorLayer);    
+    this.map.removeInteraction(this.selectInteraction);
+    this.imageVectorLayer = null;
+    this.imageVectorySource = null;
 
-    console.log(this.sourceImage.getExtent());
-
-    this.imageLayer = new layerGeoImage({
-      name: "Georef",
-      opacity: 1,
-      source: this.sourceImage,
-      
-    });
-
-    this.map.addLayer(this.imageLayer);
-    
     const tmpextent = this.imageLayer.getExtent();
-    console.log(tmpextent);
-
+    
     // Create a polygon geometry from the extent
     // const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
     const minX = tmpextent[0];
@@ -334,7 +493,68 @@ export class MapComponent implements OnInit {
     // Create a feature from the polygon geometry
     const feature = new Feature({
       geometry: polygon
-    })
+    });
+
+    this.imageVectorySource = new VectorSource({
+      features: [feature],
+    });
+
+    this.imageVectorLayer = new VectorLayer({
+      source: this.imageVectorySource,
+      projection: 'EPSG:3857',
+      displayInLayerSwitcher: false
+    } as any);
+
+    this.map.addLayer(this.imageVectorLayer);
+    this.map.addInteraction(this.selectInteraction);
+
+  }
+
+  public addImage=(imageUrl: any, width: any, height: any)=> {
+    this.mapCenter = this.map.getView().getCenter();
+    this.preMapCenter = this.map.getView().getCenter();
+    
+    this.scale = [1, 1];
+    this.startangle = 0;
+
+    this.sourceImage = new sourceGeoImage({
+      url: imageUrl,
+      imageCenter: this.mapCenter,
+      imageScale: this.scale,
+      imageRotate: this.startangle,      
+      projection: 'EPSG:3857',
+    });
+
+    this.imageLayer = new layerGeoImage({
+      name: "Georef",
+      opacity: 1,
+      source: this.sourceImage,      
+    });
+
+    this.map.addLayer(this.imageLayer);
+    
+    const tmpextent = this.imageLayer.getExtent();
+    
+    // Create a polygon geometry from the extent
+    // const polygon = fromExtent([tmpextent[1], tmpextent[0], tmpextent[3], tmpextent[2]]);
+    const minX = tmpextent[0];
+    const minY = tmpextent[1];
+    const maxX = tmpextent[2];
+    const maxY = tmpextent[3];
+    
+    const polygon = new Polygon([[
+      [minX,    maxY],
+      [minX,    minY],
+      [maxX,    minY],
+      [maxX,    maxY],
+      [minX,    maxY],
+    ]]);
+
+    // Create a feature from the polygon geometry
+    const feature = new Feature({
+      geometry: polygon
+    });
+
     this.imageVectorySource = new VectorSource({
       features: [feature],
     });
@@ -389,12 +609,9 @@ export class MapComponent implements OnInit {
     return distance;
   }
 
-  private setScaling = (e: any) => {
-    
-    this.scale[0] =  e.scale[0];
-    this.scale[1] =  e.scale[1];
+  private setScaling = (e: any) => {    
+
     const polygonFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
-    console.log(e.features.getArray()[0].getGeometry());
 
     const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
     const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
@@ -454,31 +671,30 @@ export class MapComponent implements OnInit {
     this.renderGeoJsonPolygon(parcel);
   }
 
+  removeImageLayer = () => {
+
+    this.map.removeLayer(this.imageVectorLayer);    
+    this.map.removeInteraction(this.selectInteraction);
+    this.imageVectorLayer = null;
+    this.imageVectorySource = null;
+
+    this.map.removeLayer(this.imageLayer);
+    this.imageLayer = null;
+    this.sourceImage = null;
+
+    this.scale = [1, 1];
+    this.startangle = 0;
+    this.preMapCenter = [0, 0];
+    this.mapPoints = [];
+    this.imgPoints = [];
+    this.mapPointsFeatures = [];
+    this.imgPointsFeatures = [];
+  }
+
 
 
   subdivide = (geoJson: any) => {
-    // this.http.post<any[]>('http://localhost:8080/api/subdivision', {
-    //   polygons: this.sudbdividedParcels!=null?this.sudbdividedParcels:[this.currentlySubdividingParcel],
-    //   lineStrings: [geoJson]
-    // })
-    // .pipe(
-    //   filter(res => {
-    //     return res.length >= 2 && res.length > this.sudbdividedParcels.length;
-    //   })
-    // )
-    // .subscribe(res => {
-    //   console.log(res);
-    //   this.sudbdividedParcels = res;
-    //   this.newLineStrings = res;
-    //   this.drawnLineStrings.push(geoJson);
-    //   this.renderTurfPolygons(this.sudbdividedParcels);
-
-    //   console.log({
-    //     originalParcel: this.currentlySubdividingParcel,
-    //     dividingLines: this.drawnLineStrings,
-    //     subdivisionResult: this.sudbdividedParcels
-    //   })
-    // })
+    
   }
 
   stopDrawingInteraction() {
@@ -540,9 +756,11 @@ export class MapComponent implements OnInit {
     const view = this.map?.getView();
     view?.fit(boundingBox, { nearest: true });
   }
+
   public renderPolygonsAsFeatures(polygons: Feature<Polygon>[], options?: any) {
     this.renderPolygonsAsFeature(polygons, options);
   }
+
   public renderLineStringsAsFeatures(polygons: Feature<LineString>[], options?: any) {
     this.renderLineStringsAsFeature(polygons, options);
   }
@@ -564,6 +782,7 @@ export class MapComponent implements OnInit {
       layer.setStyle(style);
     }
   }
+
   public renderLineStringsAsFeature(features: Feature<LineString>[] | Feature<LineString>, options?: any) {
     if (!features) { return; }
     const lineStringStyle = this.getDefaultLineStringStyle();
@@ -580,6 +799,7 @@ export class MapComponent implements OnInit {
       layer.setStyle(style);
     }
   }
+
   private getPolygonStyle(color: string) {
     const fillOpacity = 0.3;
     const fillColor = color;

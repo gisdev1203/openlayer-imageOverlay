@@ -92,17 +92,22 @@ export class ImageTransform extends CustomActionControl {
 		super(options, 'imageTransform', 'transform', callback);
 	}
 }
+export class undoPoint extends CustomActionControl {
+	constructor(options: any, callback: (options?: any) => void) {
+		super(options, 'undo', 'undo', callback);
+	}
+}
 
 export const toggleControl = (className: string, iconClass: string, tooltip: string, toggleFn: (active: boolean) => void) => {
 	const html = `<i class="${iconClass}" style="cursor: pointer" title="${tooltip || ''}"></i>`;
 	return createToggle(html, className, toggleFn);
 };
 export const lineStringControl = (tooltip: string, toggleFn: (active: boolean) => void) => {
-	return toggleControl( 'ol-draw-line-string','la la-edit-polygon',tooltip, toggleFn);
+	return toggleControl( 'ol-draw-line-string','fa fa-hand-paper-o',tooltip, toggleFn);
 };
 
 export const polygonControl = (tooltip: string, toggleFn: (active: boolean) => void) => {
-	return toggleControl('ol-draw-polygon', 'la la-draw-geometry', tooltip, toggleFn);
+	return toggleControl('ol-draw-polygon', 'fa fa-hand-paper-o', tooltip, toggleFn);
 };
 export const subdivisionControl = (tooltip: string, onClickFn: () => void) => {
 	return toggleControl('', 'la la-table', tooltip, onClickFn);
@@ -110,13 +115,38 @@ export const subdivisionControl = (tooltip: string, onClickFn: () => void) => {
 export const resetControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
 	return toggleControl('', 'la la-refresh', tooltip, toggleFn);
 };
+/// --------------------------------------
+export const dragControl=(tooltip:string, toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-arrows', tooltip, toggleFn);
+};
+export const scaleControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-expand', tooltip, toggleFn);
+};
+export const rotateControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-circle-o-notch', tooltip, toggleFn);
+};
+export const freeRotateControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-history', tooltip, toggleFn);
+};
+export const rockControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-lock', tooltip, toggleFn);
+};
+export const transparentControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
+	return toggleControl('', 'fa fa-tint', tooltip, toggleFn);
+};
 
+
+export const removeControl = (tooltip: string, clickFn: (event: boolean) => void) => {
+	return buttonControl('fa fa-trash', tooltip, clickFn);
+};
+
+// -------------------------------------------
 export const revertControlButton = (tooltip: string, clickFn: (event: any) => void) => {
 	return buttonControl('la la-undo', tooltip, clickFn);
 };
 
 export const redoControlButton = (tooltip: string, clickFn: (event: any) => void) => {
-	return buttonControl('la la-redo', tooltip, clickFn);
+	return buttonControl('fa fa-hand-paper-o', tooltip, clickFn);
 };
 
 export const circleControl = (tooltip: string, toggleFn: (active: boolean) => void) => {
@@ -177,6 +207,7 @@ export const createToggle = (html: string, className: string, toggleFn: (active:
 
 export const createBar = (controls: Toggle[]) => {
 	return new Bar({
+		className: 'image-tool-bar',
 		toggleOne: true,
 		controls: controls
 	});
