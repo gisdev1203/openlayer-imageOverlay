@@ -30,8 +30,7 @@ export class CustomActionControl1 extends Control {
 	constructor(options: any, icon: any, tooltip: string, callback: (options: any) => any) {
 		const actionElement = document.createElement('input');
 		actionElement.type = 'file';
-		// actionElement.innerHTML = `<span title="${tooltip}">${icon}</span>`;
-		actionElement.innerHTML = `<input type="file" >`;
+		actionElement.id = "input-imageFile";
 
 		const element = document.createElement('div');
 		element.className = 'custom-control';
@@ -125,8 +124,9 @@ export const scaleControl=(tooltip:string,toggleFn: (active: boolean) => void)=>
 export const rotateControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
 	return toggleControl('', 'fa fa-circle-o-notch', tooltip, toggleFn);
 };
-export const freeRotateControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
-	return toggleControl('', 'fa fa-history', tooltip, toggleFn);
+
+export const resetImage = (tooltip: string, clickFn: (event: boolean) => void) => {
+	return buttonControl('fa fa-history', tooltip, clickFn);
 };
 export const rockControl=(tooltip:string,toggleFn: (active: boolean) => void)=>{
 	return toggleControl('', 'fa fa-lock', tooltip, toggleFn);

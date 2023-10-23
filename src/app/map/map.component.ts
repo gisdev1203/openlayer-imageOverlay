@@ -20,7 +20,7 @@ import { DrawLineStringControl, SetSubdividingParcelControl, DrawPolygonControl,
   scaleControl,
   rotateControl,
   rockControl,
-  freeRotateControl,
+  resetImage,
   transparentControl,
   removeControl,
 } from './controls';
@@ -40,6 +40,7 @@ import Transform_ext from 'ol-ext/interaction/Transform';
 import layerGeoImage from 'ol-ext/layer/GeoImage';
 import sourceGeoImage from 'ol-ext/source/GeoImage';
 import { shiftKeyOnly, always } from 'ol/events/condition';
+
 import Point from 'ol/geom/Point';
 import { Circle } from 'ol/style';
 import { GeoReference } from './georeference';
@@ -47,7 +48,7 @@ import { GeoReference } from './georeference';
 @Component({
   selector: 'app-map',
   templateUrl: './map.component.html',
-  styleUrls: ['./map.component.scss']
+  styleUrls: ['./map.component.scss', ]
 })
 
 export class MapComponent implements OnInit {
@@ -117,8 +118,12 @@ export class MapComponent implements OnInit {
   imgRotateButton = null;
   imgLockButton = null;
   imgFreeRotateButton = null;
+  imageResetButton = null;
   imgTranparentButton = null;
   imgRemoveButton = null;
+
+  imageOriginWidth = 0;
+  imageOriginHeight = 0;
 
   preMapCenter:  [0, 0];
 
@@ -132,7 +137,7 @@ export class MapComponent implements OnInit {
     })
   }
 
-  initMap() {
+  initMap =()=> {
     this.vectorSource = new VectorSource();
     this.vectorLayer = new VectorLayer({
       source: this.vectorSource,
@@ -172,14 +177,14 @@ export class MapComponent implements OnInit {
     // Initialize the select interaction
     this.selectInteraction = new Transform_ext({
       enableRotatedTransform: false,
-      addCondition: shiftKeyOnly,
+      addCondition: shiftKeyOnly as any,
       hitTolerance: 2,
       translateFeature: false,
-      scale: false,
+      scale: true,
       rotate: false,
-      keepAspectRatio: undefined,
+      keepAspectRatio: always as any,
       translate: false,
-      keepRectangle: true,
+      keepRectangle: false,
       stretch: false,
       pointRadius: function (f:any) {
         var radius = f.get('radius') || 10;
@@ -193,6 +198,8 @@ export class MapComponent implements OnInit {
     this.selectInteraction.on('translating', this.setTranslate);
     this.selectInteraction.on('scaling', this.setScaling);
     this.selectInteraction.on(['rotateend', 'translateend', 'scaleend'], this.endInteraction);
+    this.selectInteraction.on (['select'], this.selectFeature);
+    
 
     this.map.on('click', (event: any) => {
       console.log(event.coordinate);
@@ -205,16 +212,28 @@ export class MapComponent implements OnInit {
 
   }
 
+  selectFeature = (e) => {
+    console.log('iii');
+    if (e.features && e.features.getLength()) {
+      // console.log('iii-1');
+      // // this.selectInteraction.setCenter(e.features.getArray()[0].getGeometry().getFirstCoordinate());
+      // var interiorPoint = e.features.getArray()[0].getGeometry().getInteriorPoint().getCoordinates();
+      // // this.mapCenter = [interiorPoint[0], interiorPoint[1]];    
+  
+      // this.selectInteraction.setCenter([interiorPoint[0], interiorPoint[1]]);
+    }
+  }
+
   addSubdivisionTools() {
     this.imgMoveButton = dragControl('drage Image', (active:boolean) => this.imgMove(active) );
     this.imgScaleButton = scaleControl('Scale Image', (active:boolean) => this.imgScale(active) );
     this.imgRotateButton = rotateControl('Rotate Image', (active:boolean) => this.imgRotate(active) );
 
-    this.imgFreeRotateButton = freeRotateControl('Free Rotate Image', (active:boolean) => this.imgFreeRotate(active) );
+    this.imageResetButton = resetImage('Free Rotate Image', (active:boolean) => this.resetImage() );
     this.imgLockButton = rockControl('Lock Image', (active:boolean) => this.imgRock(active) );
     this.imgTranparentButton = transparentControl('make Image Transparents', (active:boolean) => this.imgTransparents(active) );
     this.imgRemoveButton = removeControl('Remove Image', (active:boolean) => this.imgRemove(active) );
-		const mainbar = createBar([this.imgMoveButton, this.imgScaleButton, this.imgRotateButton, this.imgFreeRotateButton, this.imgLockButton, this.imgTranparentButton, this.imgRemoveButton]);
+		const mainbar = createBar([this.imgMoveButton, this.imgScaleButton, this.imgRotateButton, this.imgLockButton, this.imgTranparentButton, this.imageResetButton, this.imgRemoveButton]);
 		mainbar.setPosition('top');
 		this.map?.addControl(mainbar);
 		// this.disable([this.resetButton, this.saveButton, this.undoButton, this.redoButton]);
@@ -250,11 +269,11 @@ export class MapComponent implements OnInit {
     if (active) {
       this.imageLayer.setOpacity(0.3);
     } else {
-      this.imageLayer.setOpacity(1);      
+      this.imageLayer.setOpacity(1);
     }
   }
 
-  imgRemove(active : boolean){
+  imgRemove=(active : boolean)=>{
       this.imgPoints = [];      
       this.imgPointsFeatures.forEach((feature)=>{
         this.imageVectorySource.removeFeature(feature);
@@ -267,31 +286,36 @@ export class MapComponent implements OnInit {
         this.vectorSource.removeFeature(feature);
       })
       this.mapPointsFeatures = [];
-      this.removeImageLayer();  
+      this.removeImageLayer();
+      this.hidenImageToolbar();
+      
   }
 
   setImageSetting(moveActive: boolean, scaleActive: boolean, rotateActive: boolean, rockActive: boolean, ) {
+    
     this.selectInteraction.set('rotate', rotateActive);
     this.selectInteraction.set('translateFeature', moveActive);
     this.selectInteraction.set('scale', scaleActive);    
-    this.selectInteraction.set('keepAspectRatio', always);
+    // this.selectInteraction.set('keepAspectRatio', always);
     
     if (scaleActive) this.selectInteraction.set("keepAspectRatio", always);
-    else this.selectInteraction.set("keepAspectRatio", function(e:any){ return e.originalEvent.shiftKey });  
-
+    else this.selectInteraction.set("keepAspectRatio", function(e:any){ return e.originalEvent.shiftKey });
+    this.selectInteraction.set('translate', this.selectInteraction.get('translate'));
   }
 
   showImageToolbar() {
-
     // angular.element()
-    // const toolbar = document.getElementsByClassName('image-tool-bar');
-    // console.log(toolbar);
-    // toolbar[0].style.top = '500px';
-    
+    const toolbar = document.getElementsByClassName('image-tool-bar') as any;
+    toolbar[0].style.display = 'block';    
   }
   
   hidenImageToolbar() {
-
+    const toolbar = document.getElementsByClassName('image-tool-bar') as any;
+    toolbar[0].style.display = 'none';
+    // const input = document.getElementById("input-imageFile") as any;
+    //   // console.log(input)
+    //   // input.files = '';
+    //   input[0].value = "00000";
   }
 
   moveImageToolbar(x,y) {
@@ -383,7 +407,7 @@ export class MapComponent implements OnInit {
 
     // get feature from vectorlayer 
     var feature = this.imageVectorySource.getFeatures()[0].getProperties().geometry;
-    const polygonFeature = feature.getCoordinates()[0];
+    const polygonFeature = feature.getCoordinates()[0]; 
 
     const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
     const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
@@ -402,7 +426,9 @@ export class MapComponent implements OnInit {
     this.sourceImage.setCenter(transformCenter);
     this.vectorSource.clear();
     this.imageVectorySource.clear();
-    this.imageLayer.setOpacity(1);
+    this.imageLayer.setOpacity(0.5);
+    // this.setImageSetting(false, false, true, false);
+
   }
 
   toggleLineStringDraw = () => {   
@@ -438,8 +464,11 @@ export class MapComponent implements OnInit {
 
   // upload image
   toggleImageLoad = (event: any) => {
+    console.log('file')
     this.removeImageLayer();
     const file = event.target.files[0];
+    console.log(file);
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (e: any) => {
       const imageUrl = e.target.result;     
@@ -450,6 +479,8 @@ export class MapComponent implements OnInit {
       image.onload = () => {
         const width = image.width;
         const height = image.height;
+        this.imageOriginWidth = width;
+        this.imageOriginHeight = height;
         // const resizedDataUrl = this.resizeImage(image, 200, 10);
         this.addImage(imageUrl, width, height);
       }
@@ -522,13 +553,15 @@ export class MapComponent implements OnInit {
       imageCenter: this.mapCenter,
       imageScale: this.scale,
       imageRotate: this.startangle,      
-      projection: 'EPSG:3857',
+      // 
+      
     });
 
     this.imageLayer = new layerGeoImage({
       name: "Georef",
       opacity: 1,
-      source: this.sourceImage,      
+      source: this.sourceImage, 
+      projection: 'EPSG:3857',
     });
 
     this.map.addLayer(this.imageLayer);
@@ -557,6 +590,7 @@ export class MapComponent implements OnInit {
 
     this.imageVectorySource = new VectorSource({
       features: [feature],
+      wrapX: false
     });
 
     this.imageVectorLayer = new VectorLayer({
@@ -567,6 +601,8 @@ export class MapComponent implements OnInit {
 
     this.map.addLayer(this.imageVectorLayer);
     this.map.addInteraction(this.selectInteraction);
+    this.selectInteraction.set('translate', this.selectInteraction.get('translate'));
+    this.showImageToolbar();
   }
 
   ///
@@ -619,11 +655,12 @@ export class MapComponent implements OnInit {
     // geoimage size
     const imgWidth = this.sourceImage.getGeoImage().width;
     const imgHeight = this.sourceImage.getGeoImage().height;
+    
     const scaleX = polygonWidth / imgWidth;
     const scaleY = polygonHeight / imgHeight;
 
     var interiorPoint = e.features.getArray()[0].getGeometry().getInteriorPoint().getCoordinates();
-    this.mapCenter = [interiorPoint[0], interiorPoint[1]];
+    this.mapCenter = [interiorPoint[0], interiorPoint[1]];    
 
     this.sourceImage.setCenter(this.mapCenter);
     this.sourceImage.setScale([scaleX, scaleY]);
@@ -661,7 +698,7 @@ export class MapComponent implements OnInit {
   currentlySubdividingParcel = null;
   drawnLineStrings = [];
   sudbdividedParcels = []; 
-  newLineStrings = []; 
+  newLineStrings = [];
   
   setSubdividingParcel = ( parcel ) => {
     this.currentlySubdividingParcel = parcel;
