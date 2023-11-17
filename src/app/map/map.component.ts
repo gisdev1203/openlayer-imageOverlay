@@ -26,11 +26,14 @@ import { DrawLineStringControl, SetSubdividingParcelControl, DrawPolygonControl,
 } from './controls';
 
 
+
+
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { asArray } from 'ol/color';
 import Fill from 'ol/style/Fill';
 import Stroke from 'ol/style/Stroke';
 import Style from 'ol/style/Style';
+
 import { parcels } from './parcels';
 import { HttpClient } from '@angular/common/http';
 import { filter } from 'rxjs';
@@ -40,15 +43,19 @@ import Transform_ext from 'ol-ext/interaction/Transform';
 import layerGeoImage from 'ol-ext/layer/GeoImage';
 import sourceGeoImage from 'ol-ext/source/GeoImage';
 import { shiftKeyOnly, always } from 'ol/events/condition';
+import LayerSwitcher from 'ol-ext/control/LayerSwitcher';
 
 import Point from 'ol/geom/Point';
 import { Circle } from 'ol/style';
 import { GeoReference } from './georeference';
+import { GeoAffine } from './geoaffine';
+import OverviewMap from 'ol/control/OverviewMap';
 
 @Component({
   selector: 'app-map',
   templateUrl: './map.component.html',
   styleUrls: ['./map.component.scss', ]
+  
 })
 
 export class MapComponent implements OnInit {
@@ -97,11 +104,14 @@ export class MapComponent implements OnInit {
   vectorLayer: VectorLayer<any>;;
   vectorSource: VectorSource;
   imageVectorySource: VectorSource;
+  overviewMapControl = null;
 
   isImgPoint = false;
   isMapPoint = false;
+  isTransform = false;
 
   transformHelmert: any;
+  transformAffine: any;
 
   saveButton = null;
 	resetButton = null;
@@ -127,6 +137,8 @@ export class MapComponent implements OnInit {
 
   preMapCenter:  [0, 0];
 
+  drawFeature = null;
+
   ngOnInit() {
     this.initMap();
   }
@@ -148,6 +160,16 @@ export class MapComponent implements OnInit {
         }),
       }),
     });
+    this.overviewMapControl = new OverviewMap({
+      
+      layers: [
+        new TileLayer({
+          source: new OSM(),
+        }),
+      ],
+      target: "mapOverview",
+      collapsed: false,
+    });
 
     this.map = new Map({
       controls: defaultControls().extend([
@@ -158,6 +180,7 @@ export class MapComponent implements OnInit {
         new ImagePoint({}, this.toggleImagePoint),
         new undoPoint({}, this.undo),
         new ImageTransform({}, this.toggleImageTransform),
+        this.overviewMapControl
         ]),
       layers: [
         new TileLayer({ source: new OSM() }),
@@ -167,12 +190,22 @@ export class MapComponent implements OnInit {
       view: new View({
         // center: [-115.354, 51.0903],
         zoom: 14,
-        center: [274770, 6243929],
+        // center: [274770, 6243929],
+        center: [276319.50657413655, 6248585.696619335],
         projection: 'EPSG:3857'
       }),
     });
 
-    this.addFeatureGroupLayers();
+    // Create a layer switcher control
+    var layerSwitcher = new LayerSwitcher({
+      tipLabel: 'map-layerSwitcher', // Optional label for the button
+      target: 'map-layerSwitcher',
+      className: 'map-layerSwitcher',
+      minibar: true
+    });
+
+    // Add the layer switcher control to the map
+    this.map?.addControl(layerSwitcher);
     
     // Initialize the select interaction
     this.selectInteraction = new Transform_ext({
@@ -183,6 +216,7 @@ export class MapComponent implements OnInit {
       scale: true,
       rotate: false,
       keepAspectRatio: always as any,
+      // keepAspectRatio: undefined,
       translate: false,
       keepRectangle: false,
       stretch: false,
@@ -207,6 +241,7 @@ export class MapComponent implements OnInit {
     });
     
     this.transformHelmert = new GeoReference();
+    this.transformAffine = new GeoAffine();
 
     this.addSubdivisionTools();
 
@@ -267,7 +302,7 @@ export class MapComponent implements OnInit {
 
   imgTransparents(active:boolean) {
     if (active) {
-      this.imageLayer.setOpacity(0.3);
+      this.imageLayer.setOpacity(0.1);
     } else {
       this.imageLayer.setOpacity(1);
     }
@@ -379,6 +414,12 @@ export class MapComponent implements OnInit {
       this.mapPointsFeatures.push(feature);
       this.vectorSource.addFeature(feature); // Add a new point feature
       this.mapPoints.push(coordinate);
+    } else if (this.isTransform) {
+      var transformCenter = this.transformHelmert.transform(coordinate);
+      // var transformCenter = this.transformAffine.transform(coordinate);
+      console.log('transform', transformCenter);
+      const feature = new Feature(new Point(transformCenter));
+      this.vectorSource.addFeature(feature);
     }
   }
 
@@ -393,43 +434,259 @@ export class MapComponent implements OnInit {
     this.isMapPoint = false;
     this.isImgPoint = true;
   }
+  calculateCentroid = (vertices: number[][]) : number[] => {
+    const centroid = vertices.reduce((acc, vertex) => {
+      acc[0] += vertex[0];
+      acc[1] += vertex[1];
+      return acc;
+    }, [0, 0]);
+
+    centroid[0] /= vertices.length;
+    centroid[1] /= vertices.length;
+
+    return centroid;
+  }
+
+
 
   toggleImageTransform = () => {
     this.isImgPoint = false;
     this.isMapPoint = false;
 
     this.transformHelmert.setControlPoints(this.imgPoints, this.mapPoints);
+    
+
     var sc = this.transformHelmert.getScale();
 		var a = this.transformHelmert.getRotation();
+    console.log("angle", a);
+    console.log("scale Affin", sc);
 		// var t = this.transformHelmert.getTranslation();
     var center = this.sourceImage.getCenter();    
     var transformCenter = this.transformHelmert.transform(center);
 
-    // get feature from vectorlayer 
-    var feature = this.imageVectorySource.getFeatures()[0].getProperties().geometry;
-    const polygonFeature = feature.getCoordinates()[0]; 
-
-    const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
-    const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
-    console.log(polygonHeight);
-    
     // geoimage size
     
     const imgWidth = this.sourceImage.getGeoImage().width;
     const imgHeight = this.sourceImage.getGeoImage().height;
-    const scaleX = polygonWidth * sc[0]  / imgWidth;
-    const scaleY = polygonHeight * sc[1] / imgHeight;
+    
+    const imageurl = this.sourceImage.getGeoImage();
+    const extent = this.sourceImage.getExtent();
+        
 
+    // const scaleX = polygonWidth * sc[0]  / imgWidth;
+    // const scaleY = polygonHeight * sc[1] / imgHeight;
+
+
+    const polygonCoords = this.drawFeature;
+
+
+    // for helmert
+    var newCoords = polygonCoords.map((coord) => {
+      return this.transformHelmert.transform(coord);
+    });
+
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[0])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[1])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[2])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[3])));
+    var newHeight = this.getLengthPoints(newCoords[0], newCoords[1]);
+    var newWidth = this.getLengthPoints(newCoords[0], newCoords[3]);
+    var polygonHeight = this.getLengthPoints(polygonCoords[0], polygonCoords[1]);
+    var polygonWidth = this.getLengthPoints(polygonCoords[0], polygonCoords[3]);
+    
+    var scaleX = newHeight / imgWidth;
+    var scaleY = newWidth / imgHeight;
+    console.log("new scale: ", scaleX, scaleY);
+
+    scaleX = polygonWidth * sc[1]  / imgWidth;
+    scaleY = polygonHeight * sc[0] / imgHeight;
+    console.log("scale: ", scaleX, scaleY);
+    // var imageCenter = this.calculateCentroid(newCoords);
     if (a) this.sourceImage.setRotation(this.endangle + a);
+
     // if (sc) this.sourceImage.setScale(sc);
-    if (sc) this.sourceImage.setScale([scaleX, scaleY]);
+    this.sourceImage.setScale([scaleX, scaleY]);
     this.sourceImage.setCenter(transformCenter);
+    this.imageLayer.setOpacity(0.5);
+    this.isTransform = true;
     this.vectorSource.clear();
     this.imageVectorySource.clear();
+    return;  
+  }
+
+  toggleImageTransform1 = () => {
+    this.isImgPoint = false;
+    this.isMapPoint = false;
+
+    this.transformHelmert.setControlPoints(this.imgPoints, this.mapPoints);
+    this.transformAffine.setControlPoints(this.imgPoints, this.mapPoints);
+    // reprevious
+    // var sc = this.transformHelmert.getScale();
+		// var a = this.transformHelmert.getRotation();
+		// // var t = this.transformHelmert.getTranslation();
+    // var center = this.sourceImage.getCenter();    
+    // var transformCenter = this.transformHelmert.transform(center);
+
+    // console.log("---helmert---")
+    // console.log(this.transformHelmert.getRotation());
+
+    // console.log(this.transformHelmert.getScale());
+    // var HelmertScale = this.transformHelmert.getScale();
+    // var HelmertRotate = this.transformHelmert.getRotation()
+    // console.log("------------")
+
+    var sc = this.transformAffine.getScale();
+		var a = this.transformAffine.getRotation();
+    console.log("angle", a);
+    console.log("scale Affin", sc);
+		// var t = this.transformHelmert.getTranslation();
+    var center = this.sourceImage.getCenter();    
+    var transformCenter = this.transformAffine.transform(center);
+
+    // geoimage size
+    
+    const imgWidth = this.sourceImage.getGeoImage().width;
+    const imgHeight = this.sourceImage.getGeoImage().height;
+    
+    const imageurl = this.sourceImage.getGeoImage();
+    const extent = this.sourceImage.getExtent();
+        
+
+    // // Replace 'path/to/your/image.jpg' with the actual path to your image
+    const img = new Image();
+
+
+    img.onload = () => {
+
+      console.log('create new canvas')
+
+      // Create a new canvas element
+      const rotatedCanvas = document.createElement('canvas');
+      const rotatedCtx = rotatedCanvas.getContext('2d');
+
+      // Set the size of the rotated canvas
+      rotatedCanvas.width = img.width*2;
+      rotatedCanvas.height = img.height*2;
+
+      // rotatedCanvas.height = Math.abs(extent[1]-extent[3]);
+      // rotatedCanvas.width = Math.abs(extent[0]-extent[2]);
+
+      const centerX = rotatedCanvas.width / 2;
+      const centerY = rotatedCanvas.height / 2;
+
+      // Rotate the canvas by 45 degrees
+      rotatedCtx.translate(centerX, centerY);
+      // rotatedCtx.rotate(this.sourceImage.getRotation()); // Rotate by 45 degrees
+      // const scale = this.sourceImage.getScale();
+      // rotatedCtx.scale(scale[0], scale[1]);
+      const coef = this.transformAffine.getMatrix();
+
+      rotatedCtx.transform(coef[0], coef[1], 0, coef[3], coef[4], 0);
+      rotatedCtx.translate(-centerX, -centerY);
+
+      
+          // Draw the rotated image onto the rotated canvas
+          rotatedCtx.drawImage(img, (rotatedCanvas.width - img.width) / 2, (rotatedCanvas.height - img.height) / 2);
+
+      // Get the rotated image as a data URL
+      const rotatedImageUrl = rotatedCanvas.toDataURL('image/png'); // You can change the format as needed
+
+      // Use the rotated image URL as needed
+      console.log(rotatedImageUrl);
+      this.addImage(rotatedImageUrl, rotatedCanvas.width, rotatedCanvas.height);
+    }
+    img.src = imageurl.src;
+
+
+
+
+
+
+    // const scaleX = polygonWidth * sc[0]  / imgWidth;
+    // const scaleY = polygonHeight * sc[1] / imgHeight;
+
+
+    const polygonCoords = this.drawFeature;
+
+
+    // for helmert
+    // var newCoords = polygonCoords.map((coord) => {
+    //   return this.transformHelmert.transform(coord);
+    // });
+    // this.vectorSource.addFeature(new Feature(new Point(newCoords[0])));
+    // this.vectorSource.addFeature(new Feature(new Point(newCoords[1])));
+    // this.vectorSource.addFeature(new Feature(new Point(newCoords[2])));
+    // this.vectorSource.addFeature(new Feature(new Point(newCoords[3])));
+    // var newHeight = this.getLengthPoints(newCoords[0], newCoords[1]);
+    // var newWidth = this.getLengthPoints(newCoords[0], newCoords[3]);
+    // var polygonWidth = this.getLengthPoints(polygonCoords[0], polygonCoords[1]);
+    // var polygonHeight = this.getLengthPoints(polygonCoords[0], polygonCoords[3]);
+    
+    // var scaleX = newHeight / imgWidth;
+    // var scaleY = newWidth / imgHeight;
+    // console.log("new scale: ", scaleX, scaleY);
+
+    // scaleX = polygonWidth * HelmertScale[1]  / imgWidth;
+    // scaleY = polygonHeight * HelmertScale[0] / imgHeight;
+    // console.log("scale: ", scaleX, scaleY);
+    // var imageCenter = this.calculateCentroid(newCoords);
+    // if (a) this.sourceImage.setRotation(this.endangle + HelmertRotate);
+
+    // // if (sc) this.sourceImage.setScale(sc);
+    // this.sourceImage.setScale([scaleX, scaleY]);
+    // this.sourceImage.setCenter(transformCenter);
+    // this.imageLayer.setOpacity(0.5);
+    // return;
+    // for affine
+
+    
+    var newCoords = polygonCoords.map((coord) => {
+      return this.transformAffine.transform(coord);
+    });
+
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[0])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[1])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[2])));
+    this.vectorSource.addFeature(new Feature(new Point(newCoords[3])));
+
+    var newHeight = this.getLengthPoints(newCoords[0], newCoords[1]);
+    var newWidth = this.getLengthPoints(newCoords[0], newCoords[3]);
+    var polygonWidth = this.getLengthPoints(polygonCoords[0], polygonCoords[1]);
+    var polygonHeight = this.getLengthPoints(polygonCoords[0], polygonCoords[3]);
+    
+    var scaleX = newHeight / imgWidth;
+    var scaleY = newWidth / imgHeight;
+    console.log("new scale: ", scaleX, scaleY);
+
+    scaleX = polygonWidth * sc[1]  / imgWidth;
+    scaleY = polygonHeight * sc[0] / imgHeight;
+    console.log("scale: ", scaleX, scaleY);
+    var imageCenter = this.calculateCentroid(newCoords);
+
+    // get angular for rotating
+
+    var oldCentroid = this.calculateCentroid(polygonCoords.slice(0, 4));
+    var newCentroid = this.calculateCentroid(newCoords.slice(0, 4));
+
+    var angle = Math.atan2(newCentroid[1], newCentroid[0]) - Math.atan2(oldCentroid[0], oldCentroid[0]);
+    console.log('feature angular ', angle)
+    this.vectorSource.addFeature(new Feature(new Point(imageCenter)));
+
+    // this.sourceImage.setRotation(this.endangle + angle);
+    if (a) this.sourceImage.setRotation(this.endangle + angle);
+
+    // if (sc) this.sourceImage.setScale(sc);
+    this.sourceImage.setScale([scaleX, scaleY]);
+    this.sourceImage.setCenter(transformCenter);
+    // this.vectorSource.clear();
+    // this.imageVectorySource.clear();
     this.imageLayer.setOpacity(0.5);
-    // this.setImageSetting(false, false, true, false);
+    this.isTransform = true;
+
+    console.log(sc, a);
 
   }
+
 
   toggleLineStringDraw = () => {   
     
@@ -526,6 +783,8 @@ export class MapComponent implements OnInit {
       geometry: polygon
     });
 
+    this.drawFeature = feature.getGeometry().getCoordinates()[0];
+
     this.imageVectorySource = new VectorSource({
       features: [feature],
     });
@@ -545,7 +804,7 @@ export class MapComponent implements OnInit {
     this.mapCenter = this.map.getView().getCenter();
     this.preMapCenter = this.map.getView().getCenter();
     
-    this.scale = [1, 1];
+    this.scale = [0.5, 0.5];
     this.startangle = 0;
 
     this.sourceImage = new sourceGeoImage({
@@ -587,6 +846,8 @@ export class MapComponent implements OnInit {
     const feature = new Feature({
       geometry: polygon
     });
+    this.drawFeature = feature.getGeometry().getCoordinates()[0];
+
 
     this.imageVectorySource = new VectorSource({
       features: [feature],
@@ -608,8 +869,8 @@ export class MapComponent implements OnInit {
   ///
 
   public endInteraction = (e: any) => {
-
-  }
+    this.drawFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
+    }
 
 
   public imageRotate = (event: any) => {
@@ -617,21 +878,25 @@ export class MapComponent implements OnInit {
     this.endangle = angle;
     event.feature.set('angle', angle);
     this.sourceImage.setRotation(angle);
-  }
+    this.drawFeature = event.features.getArray()[0].getGeometry().getCoordinates()[0];
+    }
 
   public setAngle = (e: any) => {    
-    // Rotation
-    this.startangle = e.feature.get('angle') || 0;
-    // radius
-    this.startRadius = e.feature.get('radius') || 10;
-    // Translation
+    
+    // // Rotation
+    // this.startangle = e.feature.get('angle') || 0;
+    // console.log(this.startangle)
+    // // radius
+    // this.startRadius = e.feature.get('radius') || 10;
+    // // Translation
   }
 
   public setTranslate = (e: any) => {
     this.mapCenter[0] += e.delta[0];
     this.mapCenter[1] += e.delta[1];
     this.sourceImage.setCenter(this.mapCenter);
-  }
+    this.drawFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
+    }
 
   getLengthPoints(point1: any, point2: any) {
     
@@ -648,7 +913,7 @@ export class MapComponent implements OnInit {
   private setScaling = (e: any) => {    
 
     const polygonFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
-
+    this.drawFeature = e.features.getArray()[0].getGeometry().getCoordinates()[0];
     const polygonHeight = this.getLengthPoints(polygonFeature[0], polygonFeature[1]);
     const polygonWidth = this.getLengthPoints(polygonFeature[0], polygonFeature[3]);
 
