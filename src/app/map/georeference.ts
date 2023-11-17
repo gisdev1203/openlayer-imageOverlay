@@ -11,7 +11,8 @@
 export class GeoReference {
 
     options = {};
-    similarity: any;
+    // similarity: any;
+    similarity: false;
     matrix: false | number[] = [1, 0, 0, 0, 1, 0];
     hasControlPoints = false;
     a_: any;
@@ -28,8 +29,13 @@ export class GeoReference {
         else {
             let aaa: any;
             let yyy: any;
-            if (this.similarity || xy.length < 3) this.matrix = this._similarity(xy, XY) as number[];
-            else this.matrix = this._helmert(xy, XY, aaa, yyy) as number[];
+            if (this.similarity || xy.length < 3) {
+                this.matrix = this._similarity(xy, XY) as number[];
+                console.log('similarity');
+            }
+            else  { this.matrix = this._helmert(xy, XY, aaa, yyy) as number[];
+                console.log('halmert');
+            };
             this.hasControlPoints = true;
         }
         return this.hasControlPoints;
